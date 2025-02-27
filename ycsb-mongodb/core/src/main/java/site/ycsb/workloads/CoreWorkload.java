@@ -1,53 +1,76 @@
 /**
  * Copyright (c) 2010 Yahoo! Inc., Copyright (c) 2016-2020 YCSB contributors. All rights reserved.
  * <p>
- * Licensed under the Apache License, Version 2.0 (the "License"); you
- * may not use this file except in compliance with the License. You
- * may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
  * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing
- * permissions and limitations under the License. See accompanying
- * LICENSE file.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License. See accompanying LICENSE file.
  */
 
 package site.ycsb.workloads;
 
-import site.ycsb.*;
-import site.ycsb.generator.*;
-import site.ycsb.generator.UniformLongGenerator;
-import site.ycsb.measurements.Measurements;
-
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Vector;
+import site.ycsb.ByteIterator;
+import site.ycsb.Client;
+import site.ycsb.DB;
+import site.ycsb.RandomByteIterator;
+import site.ycsb.Status;
+import site.ycsb.StringByteIterator;
+import site.ycsb.Utils;
+import site.ycsb.Workload;
+import site.ycsb.WorkloadException;
+import site.ycsb.generator.AcknowledgedCounterGenerator;
+import site.ycsb.generator.ConstantIntegerGenerator;
+import site.ycsb.generator.CounterGenerator;
+import site.ycsb.generator.DiscreteGenerator;
+import site.ycsb.generator.ExponentialGenerator;
+import site.ycsb.generator.HistogramGenerator;
+import site.ycsb.generator.HotspotIntegerGenerator;
+import site.ycsb.generator.NumberGenerator;
+import site.ycsb.generator.ScrambledZipfianGenerator;
+import site.ycsb.generator.SequentialGenerator;
+import site.ycsb.generator.SkewedLatestGenerator;
+import site.ycsb.generator.UniformLongGenerator;
+import site.ycsb.generator.ZipfianGenerator;
+import site.ycsb.measurements.Measurements;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
- * relative proportion of different kinds of operations, and other properties of the workload,
- * are controlled by parameters specified at runtime.
+ * relative proportion of different kinds of operations, and other properties of the workload, are
+ * controlled by parameters specified at runtime.
  * <p>
  * Properties to control the client:
  * <UL>
  * <LI><b>fieldcount</b>: the number of fields in a record (default: 10)
  * <LI><b>fieldlength</b>: the size of each field (default: 100)
  * <LI><b>minfieldlength</b>: the minimum size of each field (default: 1)
- * <LI><b>readallfields</b>: should reads read all fields (true) or just one (false) (default: true)
- * <LI><b>writeallfields</b>: should updates and read/modify/writes update all fields (true) or just
- * one (false) (default: false)
+ * <LI><b>readallfields</b>: should reads read all fields (true) or just one (false) (default:
+ * true)
+ * <LI><b>writeallfields</b>: should updates and read/modify/writes update all fields (true) or
+ * just one (false) (default: false)
  * <LI><b>readproportion</b>: what proportion of operations should be reads (default: 0.95)
  * <LI><b>updateproportion</b>: what proportion of operations should be updates (default: 0.05)
  * <LI><b>insertproportion</b>: what proportion of operations should be inserts (default: 0)
  * <LI><b>scanproportion</b>: what proportion of operations should be scans (default: 0)
  * <LI><b>readmodifywriteproportion</b>: what proportion of operations should be read a record,
  * modify it, write it back (default: 0)
- * <LI><b>requestdistribution</b>: what distribution should be used to select the records to operate
- * on - uniform, zipfian, hotspot, sequential, exponential or latest (default: uniform)
+ * <LI><b>requestdistribution</b>: what distribution should be used to select the records to
+ * operate on - uniform, zipfian, hotspot, sequential, exponential or latest (default: uniform)
  * <LI><b>minscanlength</b>: for scans, what is the minimum number of records to scan (default: 1)
- * <LI><b>maxscanlength</b>: for scans, what is the maximum number of records to scan (default: 1000)
+ * <LI><b>maxscanlength</b>: for scans, what is the maximum number of records to scan (default:
+ * 1000)
  * <LI><b>scanlengthdistribution</b>: for scans, what distribution should be used to choose the
  * number of records to scan, for each scan, between 1 and maxscanlength (default: uniform)
  * <LI><b>insertstart</b>: for parallel loads and runs, defines the starting record for this
@@ -55,17 +78,18 @@ import java.util.*;
  * <LI><b>insertcount</b>: for parallel loads and runs, defines the number of records for this
  * YCSB instance (default: recordcount)
  * <LI><b>zeropadding</b>: for generating a record sequence compatible with string sort order by
- * 0 padding the record number. Controls the number of 0s to use for padding. (default: 1)
- * For example for row 5, with zeropadding=1 you get 'user5' key and with zeropading=8 you get
+ * 0 padding the record number. Controls the number of 0s to use for padding. (default: 1) For
+ * example for row 5, with zeropadding=1 you get 'user5' key and with zeropading=8 you get
  * 'user00000005' key. In order to see its impact, zeropadding needs to be bigger than number of
  * digits in the record number.
  * <LI><b>insertorder</b>: should records be inserted in order by key ("ordered"), or in hashed
  * order ("hashed") (default: hashed)
- * <LI><b>fieldnameprefix</b>: what should be a prefix for field names, the shorter may decrease the
- * required storage size (default: "field")
+ * <LI><b>fieldnameprefix</b>: what should be a prefix for field names, the shorter may decrease
+ * the required storage size (default: "field")
  * </ul>
  */
 public class CoreWorkload extends Workload {
+
   /**
    * The name of the database table to run queries against.
    */
@@ -87,7 +111,7 @@ public class CoreWorkload extends Workload {
    * Default number of fields in a record.
    */
   public static final String FIELD_COUNT_PROPERTY_DEFAULT = "10";
-  
+
   private List<String> fieldnames;
 
   /**
@@ -184,8 +208,8 @@ public class CoreWorkload extends Workload {
   protected boolean writeallfields;
 
   /**
-   * The name of the property for deciding whether to check all returned
-   * data against the formation template to ensure data integrity.
+   * The name of the property for deciding whether to check all returned data against the formation
+   * template to ensure data integrity.
    */
   public static final String DATA_INTEGRITY_PROPERTY = "dataintegrity";
 
@@ -195,8 +219,8 @@ public class CoreWorkload extends Workload {
   public static final String DATA_INTEGRITY_PROPERTY_DEFAULT = "false";
 
   /**
-   * Set to true if want to check correctness of reads. Must also
-   * be set to true during loading phase to function.
+   * Set to true if want to check correctness of reads. Must also be set to true during loading
+   * phase to function.
    */
   private boolean dataintegrity;
 
@@ -231,6 +255,16 @@ public class CoreWorkload extends Workload {
   public static final String INSERT_PROPORTION_PROPERTY_DEFAULT = "0.0";
 
   /**
+   * The name of the property for the proportion of transactions that are deletions.
+   */
+  public static final String DELETE_PROPORTION_PROPERTY = "deleteproportion";
+
+  /**
+   * The default proportion of transactions that are deletions.
+   */
+  public static final String DELETE_PROPORTION_PROPERTY_DEFAULT = "0.0";
+
+  /**
    * The name of the property for the proportion of transactions that are scans.
    */
   public static final String SCAN_PROPORTION_PROPERTY = "scanproportion";
@@ -262,8 +296,8 @@ public class CoreWorkload extends Workload {
   public static final String REQUEST_DISTRIBUTION_PROPERTY_DEFAULT = "uniform";
 
   /**
-   * The name of the property for adding zero padding to record numbers in order to match
-   * string sort order. Controls the number of 0s to left pad with.
+   * The name of the property for adding zero padding to record numbers in order to match string
+   * sort order. Controls the number of 0s to left pad with.
    */
   public static final String ZERO_PADDING_PROPERTY = "zeropadding";
 
@@ -391,7 +425,8 @@ public class CoreWorkload extends Workload {
     int fieldlength =
         Integer.parseInt(p.getProperty(FIELD_LENGTH_PROPERTY, FIELD_LENGTH_PROPERTY_DEFAULT));
     int minfieldlength =
-        Integer.parseInt(p.getProperty(MIN_FIELD_LENGTH_PROPERTY, MIN_FIELD_LENGTH_PROPERTY_DEFAULT));
+        Integer.parseInt(
+            p.getProperty(MIN_FIELD_LENGTH_PROPERTY, MIN_FIELD_LENGTH_PROPERTY_DEFAULT));
     String fieldlengthhistogram = p.getProperty(
         FIELD_LENGTH_HISTOGRAM_FILE_PROPERTY, FIELD_LENGTH_HISTOGRAM_FILE_PROPERTY_DEFAULT);
     if (fieldlengthdistribution.compareTo("constant") == 0) {
@@ -415,8 +450,8 @@ public class CoreWorkload extends Workload {
   }
 
   /**
-   * Initialize the scenario.
-   * Called once, in the main client thread, before any operations are started.
+   * Initialize the scenario. Called once, in the main client thread, before any operations are
+   * started.
    */
   @Override
   public void init(Properties p) throws WorkloadException {
@@ -447,8 +482,9 @@ public class CoreWorkload extends Workload {
 
     long insertstart =
         Long.parseLong(p.getProperty(INSERT_START_PROPERTY, INSERT_START_PROPERTY_DEFAULT));
-    long insertcount=
-        Integer.parseInt(p.getProperty(INSERT_COUNT_PROPERTY, String.valueOf(recordcount - insertstart)));
+    long insertcount =
+        Integer.parseInt(
+            p.getProperty(INSERT_COUNT_PROPERTY, String.valueOf(recordcount - insertstart)));
     // Confirm valid values for insertstart and insertcount in relation to recordcount
     if (recordcount < (insertstart + insertcount)) {
       System.err.println("Invalid combination of insertstart, insertcount and recordcount.");
@@ -479,7 +515,8 @@ public class CoreWorkload extends Workload {
       System.out.println("Data integrity is enabled.");
     }
 
-    if (p.getProperty(INSERT_ORDER_PROPERTY, INSERT_ORDER_PROPERTY_DEFAULT).compareTo("hashed") == 0) {
+    if (p.getProperty(INSERT_ORDER_PROPERTY, INSERT_ORDER_PROPERTY_DEFAULT).compareTo("hashed")
+        == 0) {
       orderedinserts = false;
     } else {
       orderedinserts = true;
@@ -516,7 +553,8 @@ public class CoreWorkload extends Workload {
       int opcount = Integer.parseInt(p.getProperty(Client.OPERATION_COUNT_PROPERTY));
       int expectednewkeys = (int) ((opcount) * insertproportion * 2.0); // 2 is fudge factor
 
-      keychooser = new ScrambledZipfianGenerator(insertstart, insertstart + insertcount + expectednewkeys);
+      keychooser = new ScrambledZipfianGenerator(insertstart,
+          insertstart + insertcount + expectednewkeys);
     } else if (requestdistrib.compareTo("latest") == 0) {
       keychooser = new SkewedLatestGenerator(transactioninsertkeysequence);
     } else if (requestdistrib.equals("hotspot")) {
@@ -605,9 +643,9 @@ public class CoreWorkload extends Workload {
 
   /**
    * Do one insert operation. Because it will be called concurrently from multiple client threads,
-   * this function must be thread safe. However, avoid synchronized, or the threads will block waiting
-   * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
-   * have no side effects other than DB operations.
+   * this function must be thread safe. However, avoid synchronized, or the threads will block
+   * waiting for each other, and it will be difficult to reach the target throughput. Ideally, this
+   * function would have no side effects other than DB operations.
    */
   @Override
   public boolean doInsert(DB db, Object threadstate) {
@@ -636,8 +674,9 @@ public class CoreWorkload extends Workload {
         }
 
       } else {
-        System.err.println("Error inserting, not retrying any more. number of attempts: " + numOfRetries +
-            "Insertion Retry Limit: " + insertionRetryLimit);
+        System.err.println(
+            "Error inserting, not retrying any more. number of attempts: " + numOfRetries +
+                "Insertion Retry Limit: " + insertionRetryLimit);
         break;
 
       }
@@ -648,42 +687,43 @@ public class CoreWorkload extends Workload {
 
   /**
    * Do one transaction operation. Because it will be called concurrently from multiple client
-   * threads, this function must be thread safe. However, avoid synchronized, or the threads will block waiting
-   * for each other, and it will be difficult to reach the target throughput. Ideally, this function would
-   * have no side effects other than DB operations.
+   * threads, this function must be thread safe. However, avoid synchronized, or the threads will
+   * block waiting for each other, and it will be difficult to reach the target throughput. Ideally,
+   * this function would have no side effects other than DB operations.
    */
   @Override
   public boolean doTransaction(DB db, Object threadstate) {
     String operation = operationchooser.nextString();
-    if(operation == null) {
+    if (operation == null) {
       return false;
     }
 
     switch (operation) {
-    case "READ":
-      doTransactionRead(db);
-      break;
-    case "UPDATE":
-      doTransactionUpdate(db);
-      break;
-    case "INSERT":
-      doTransactionInsert(db);
-      break;
-    case "SCAN":
-      doTransactionScan(db);
-      break;
-    default:
-      doTransactionReadModifyWrite(db);
+      case "READ":
+        doTransactionRead(db);
+        break;
+      case "UPDATE":
+        doTransactionUpdate(db);
+        break;
+      case "INSERT":
+        doTransactionInsert(db);
+        break;
+      case "DELETE":
+        doTransactionDelete(db);
+        break;
+      case "SCAN":
+        doTransactionScan(db);
+        break;
+      default:
+        doTransactionReadModifyWrite(db);
     }
 
     return true;
   }
 
   /**
-   * Results are reported in the first three buckets of the histogram under
-   * the label "VERIFY".
-   * Bucket 0 means the expected data was returned.
-   * Bucket 1 means incorrect data was returned.
+   * Results are reported in the first three buckets of the histogram under the label "VERIFY".
+   * Bucket 0 means the expected data was returned. Bucket 1 means incorrect data was returned.
    * Bucket 2 means null data was returned when some data was expected.
    */
   protected void verifyRow(String key, HashMap<String, ByteIterator> cells) {
@@ -776,7 +816,6 @@ public class CoreWorkload extends Workload {
 
     HashMap<String, ByteIterator> cells = new HashMap<String, ByteIterator>();
 
-
     long ist = measurements.getIntendedStartTimeNs();
     long st = System.nanoTime();
     db.read(table, keyname, fields, cells);
@@ -848,15 +887,23 @@ public class CoreWorkload extends Workload {
     }
   }
 
-  static void addPortion(DiscreteGenerator operationChooser, String operation, double portion) {
-      System.out.println("[WORKLOAD], " + operation + ", " + portion + "%.");
-      operationChooser.addValue(portion, operation);
+  public void doTransactionDelete(DB db) {
+    long keynum = nextKeynum();
+
+    String keyname = CoreWorkload.buildKeyName(keynum, zeropadding, orderedinserts);
+
+    db.delete(table, keyname);
   }
+
+  static void addPortion(DiscreteGenerator operationChooser, String operation, double portion) {
+    System.out.println("[WORKLOAD], " + operation + ", " + portion + "%.");
+    operationChooser.addValue(portion, operation);
+  }
+
   /**
    * Creates a weighted discrete values with database operations for a workload to perform.
-   * Weights/proportions are read from the properties list and defaults are used
-   * when values are not configured.
-   * Current operations are "READ", "UPDATE", "INSERT", "SCAN" and "READMODIFYWRITE".
+   * Weights/proportions are read from the properties list and defaults are used when values are not
+   * configured. Current operations are "READ", "UPDATE", "INSERT", "SCAN" and "READMODIFYWRITE".
    *
    * @param p The properties list to pull weights from.
    * @return A generator that can be used to determine the next operation to perform.
@@ -872,13 +919,15 @@ public class CoreWorkload extends Workload {
         p.getProperty(UPDATE_PROPORTION_PROPERTY, UPDATE_PROPORTION_PROPERTY_DEFAULT));
     final double insertproportion = Double.parseDouble(
         p.getProperty(INSERT_PROPORTION_PROPERTY, INSERT_PROPORTION_PROPERTY_DEFAULT));
+    final double deleteproportion = Double.parseDouble(
+        p.getProperty(DELETE_PROPORTION_PROPERTY, DELETE_PROPORTION_PROPERTY_DEFAULT));
     final double scanproportion = Double.parseDouble(
         p.getProperty(SCAN_PROPORTION_PROPERTY, SCAN_PROPORTION_PROPERTY_DEFAULT));
     final double readmodifywriteproportion = Double.parseDouble(p.getProperty(
         READMODIFYWRITE_PROPORTION_PROPERTY, READMODIFYWRITE_PROPORTION_PROPERTY_DEFAULT));
 
     final DiscreteGenerator operationchooser = new DiscreteGenerator();
-    
+
     if (readproportion > 0) {
       addPortion(operationchooser, "READ", readproportion);
     }
@@ -889,6 +938,10 @@ public class CoreWorkload extends Workload {
 
     if (insertproportion > 0) {
       addPortion(operationchooser, "INSERT", insertproportion);
+    }
+
+    if (deleteproportion > 0) {
+      addPortion(operationchooser, "DELETE", deleteproportion);
     }
 
     if (scanproportion > 0) {
