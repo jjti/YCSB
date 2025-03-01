@@ -680,6 +680,7 @@ public class MongoDbClient extends DB {
             new UpdateOptions().upsert(true));
         return Status.OK;
       } catch (Exception e) {
+        e.printStackTrace();
         return Status.ERROR;
       }
     }
@@ -698,10 +699,7 @@ public class MongoDbClient extends DB {
         insertCount = 0;
         return Status.OK;
       } catch (Exception e) {
-        if (e.getMessage().contains("duplicate key error")) {
-          return Status.OK;
-        }
-
+        e.printStackTrace();
         return Status.ERROR;
       }
     }
