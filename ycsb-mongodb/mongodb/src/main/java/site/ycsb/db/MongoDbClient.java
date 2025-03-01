@@ -23,6 +23,7 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.CreateCollectionOptions;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
@@ -687,13 +688,13 @@ public class MongoDbClient extends DB {
       insertList = new ArrayList<>(BATCHSIZE);
     }
     insertCount++;
-    insertList.add(new UpdateOneModel<>(new Document("_id", key), new Document("$set", r),
+    insertList.add(new UpdateOneModel<>(new Document("_id", key), r,
         new UpdateOptions().upsert(true)));
     if (insertCount < BATCHSIZE) {
       return Status.OK;
     } else {
       try {
-        collection.bulkWrite(insertList);
+        collection.bulkWrite(insertList, new BulkWriteOptions().ordered(false));
         insertCount = 0;
         return Status.OK;
       } catch (Exception e) {
