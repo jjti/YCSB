@@ -689,7 +689,7 @@ public class MongoDbClient extends DB {
       insertList = new ArrayList<>(BATCHSIZE);
     }
     insertCount++;
-    insertList.add(new UpdateOneModel<>(new Document("_id", key), r,
+    insertList.add(new UpdateOneModel<>(new Document("_id", key), new Document("$set", r),
         new UpdateOptions().upsert(true)));
     if (insertCount < BATCHSIZE) {
       return Status.OK;
