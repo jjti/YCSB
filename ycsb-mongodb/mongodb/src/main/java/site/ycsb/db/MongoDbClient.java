@@ -24,7 +24,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.CreateCollectionOptions;
-import com.mongodb.client.model.InsertManyOptions;
+import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.vault.DataKeyOptions;
 import com.mongodb.client.result.UpdateResult;
@@ -110,7 +110,7 @@ public class MongoDbClient extends DB {
    * Allow inserting batches to save time during load
    */
   private static Integer BATCHSIZE;
-  private List<Document> insertList = null;
+  private List<UpdateOneModel<Document>> insertList = null;
   private Integer insertCount = 0;
 
   /**
@@ -679,32 +679,28 @@ public class MongoDbClient extends DB {
             new UpdateOptions().upsert(true));
         return Status.OK;
       } catch (Exception e) {
-        System.err.println("Couldn't insert key " + key);
-        e.printStackTrace();
         return Status.ERROR;
       }
     }
+
     if (insertCount == 0) {
       insertList = new ArrayList<>(BATCHSIZE);
     }
     insertCount++;
-    insertList.add(r);
+    insertList.add(new UpdateOneModel<>(new Document("_id", key), new Document("$set", r),
+        new UpdateOptions().upsert(true)));
     if (insertCount < BATCHSIZE) {
       return Status.OK;
     } else {
       try {
-        collection.insertMany(insertList, new InsertManyOptions().ordered(false));
+        collection.bulkWrite(insertList);
         insertCount = 0;
         return Status.OK;
       } catch (Exception e) {
         if (e.getMessage().contains("duplicate key error")) {
-          System.err.println("Warning: ignoring duplicate key exception " + insertCount);
-          e.printStackTrace();
           return Status.OK;
         }
 
-        System.err.println("Exception while trying bulk insert with " + insertCount);
-        e.printStackTrace();
         return Status.ERROR;
       }
     }
