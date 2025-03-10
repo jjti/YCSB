@@ -557,6 +557,7 @@ public class MongoDbClient extends DB {
         }
         settingsBuilder.writeConcern(writeConcern);
         settingsBuilder.readPreference(readPreference);
+        settingsBuilder.retryWrites(false);
 
         String userPassword =
             username.equals("") ? "" : username + (password.equals("") ? "" : ":" + password) + "@";
