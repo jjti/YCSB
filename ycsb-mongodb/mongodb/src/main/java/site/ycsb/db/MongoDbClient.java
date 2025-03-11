@@ -28,7 +28,6 @@ import com.mongodb.client.model.CreateCollectionOptions;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.vault.DataKeyOptions;
-import com.mongodb.client.result.UpdateResult;
 import com.mongodb.client.vault.ClientEncryption;
 import com.mongodb.client.vault.ClientEncryptions;
 import java.nio.ByteBuffer;
@@ -112,7 +111,9 @@ public class MongoDbClient extends DB {
    */
   private static Integer BATCHSIZE;
   private List<UpdateOneModel<Document>> insertList = null;
+  private List<UpdateOneModel<Document>> updateList = null;
   private Integer insertCount = 0;
+  private Integer updateCount = 0;
 
   /**
    * The database to access.
@@ -764,29 +765,37 @@ public class MongoDbClient extends DB {
   @Override
   public Status update(String table, String key,
       Map<String, ByteIterator> values) {
-    try {
-      MongoCollection<Document> collection = db[serverCounter++ % db.length].getCollection(table);
-      Document q = new Document("_id", key);
-      Document u = new Document();
-      Document fieldsToSet = new Document();
-      for (String tmpKey : values.keySet()) {
-        byte[] data = overrideDataIfDiscrete(tmpKey, values.get(tmpKey).toArray());
-        if (datatype.equals("string")) {
-          fieldsToSet.put(tmpKey, new String(applyCompressibility(data)));
-        } else {
-          fieldsToSet.put(tmpKey, applyCompressibility(data));
-        }
+    Document q = new Document("_id", key);
+    Document u = new Document();
+    Document fieldsToSet = new Document();
+    for (String tmpKey : values.keySet()) {
+      byte[] data = overrideDataIfDiscrete(tmpKey, values.get(tmpKey).toArray());
+      if (datatype.equals("string")) {
+        fieldsToSet.put(tmpKey, new String(applyCompressibility(data)));
+      } else {
+        fieldsToSet.put(tmpKey, applyCompressibility(data));
       }
-      u.put("$set", fieldsToSet);
-      UpdateResult res = collection.updateOne(q, u);
-      if (res.getMatchedCount() == 0) {
-        System.err.println("Nothing updated for key " + key);
+    }
+    u.put("$set", fieldsToSet);
+
+    if (updateCount == 0) {
+      updateList = new ArrayList<>(BATCHSIZE);
+    }
+    updateCount++;
+    updateList.add(new UpdateOneModel<>(q, u, new UpdateOptions().upsert(false)));
+    if (updateCount < BATCHSIZE) {
+      return Status.OK;
+    } else {
+      try {
+        MongoCollection<Document> collection = db[serverCounter++ % db.length].getCollection(
+            table);
+        collection.bulkWrite(updateList, new BulkWriteOptions().ordered(false));
+        updateCount = 0;
+        return Status.OK;
+      } catch (Exception e) {
+        e.printStackTrace();
         return Status.ERROR;
       }
-      return Status.OK;
-    } catch (Exception e) {
-      System.err.println(e.toString());
-      return Status.ERROR;
     }
   }
 
