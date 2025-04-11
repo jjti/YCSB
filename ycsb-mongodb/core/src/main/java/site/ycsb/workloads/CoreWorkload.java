@@ -620,7 +620,13 @@ public class CoreWorkload extends Workload {
     for (String fieldkey : fieldnames) {
       ByteIterator data;
       if (fixedfields) {
-        data = new StringByteIterator(FIXED_FIELD);
+        StringBuilder sb = new StringBuilder();
+        long size = fieldlengthgenerator.nextValue().longValue();
+        for (int i = 0; i < size; i++) {
+          sb.append("A");
+        }
+
+        data = new StringByteIterator(sb.toString());
       } else if (dataintegrity) {
         data = new StringByteIterator(buildDeterministicValue(key, fieldkey));
       } else {
