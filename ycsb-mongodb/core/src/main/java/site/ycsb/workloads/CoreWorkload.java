@@ -90,6 +90,8 @@ import site.ycsb.measurements.Measurements;
  */
 public class CoreWorkload extends Workload {
 
+  private static final String FIXED_FIELD = new String(new char[100000]).replace('\0', 'A');
+
   /**
    * The name of the database table to run queries against.
    */
@@ -223,6 +225,8 @@ public class CoreWorkload extends Workload {
    * phase to function.
    */
   private boolean dataintegrity;
+
+  private boolean fixedfields;
 
   /**
    * The name of the property for the proportion of transactions that are reads.
@@ -501,6 +505,7 @@ public class CoreWorkload extends Workload {
     writeallfields = Boolean.parseBoolean(
         p.getProperty(WRITE_ALL_FIELDS_PROPERTY, WRITE_ALL_FIELDS_PROPERTY_DEFAULT));
 
+    fixedfields = Boolean.parseBoolean(p.getProperty("fixedfields", "false"));
     dataintegrity = Boolean.parseBoolean(
         p.getProperty(DATA_INTEGRITY_PROPERTY, DATA_INTEGRITY_PROPERTY_DEFAULT));
     // Confirm that fieldlengthgenerator returns a constant if data
@@ -593,7 +598,9 @@ public class CoreWorkload extends Workload {
 
     String fieldkey = fieldnames.get(fieldchooser.nextValue().intValue());
     ByteIterator data;
-    if (dataintegrity) {
+    if (fixedfields) {
+      data = new StringByteIterator(FIXED_FIELD);
+    } else if (dataintegrity) {
       data = new StringByteIterator(buildDeterministicValue(key, fieldkey));
     } else {
       // fill with random data
@@ -612,7 +619,9 @@ public class CoreWorkload extends Workload {
 
     for (String fieldkey : fieldnames) {
       ByteIterator data;
-      if (dataintegrity) {
+      if (fixedfields) {
+        data = new StringByteIterator(FIXED_FIELD);
+      } else if (dataintegrity) {
         data = new StringByteIterator(buildDeterministicValue(key, fieldkey));
       } else {
         // fill with random data
